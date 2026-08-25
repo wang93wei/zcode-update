@@ -9,7 +9,11 @@ const DEFAULT_ENDPOINT: &str = "https://zcode.z.ai/api/v1/releases/electron/mani
 
 /// 查询并解析 ZCode Electron 更新清单。
 #[derive(Parser, Debug, Default)]
-#[command(name = "zcode-update", version, about = "查询并解析 ZCode Electron 更新清单")]
+#[command(
+    name = "zcode-update",
+    version,
+    about = "查询并解析 ZCode Electron 更新清单"
+)]
 pub struct Cli {
     /// 查询目标：mac（默认）或 windows
     #[arg(long)]
@@ -97,7 +101,9 @@ pub fn resolve_source(cli: &Cli) -> Result<Source> {
     };
 
     let id = channel_id(cli.channel.as_deref().unwrap_or("preview"))?;
-    Ok(Source::Remote(format!("{DEFAULT_ENDPOINT}?platform={platform}&channel={id}")))
+    Ok(Source::Remote(format!(
+        "{DEFAULT_ENDPOINT}?platform={platform}&channel={id}"
+    )))
 }
 
 #[cfg(test)]
@@ -134,11 +140,17 @@ mod tests {
 
     #[test]
     fn url_must_be_http_or_https() {
-        let cli = Cli { url: Some("ftp://example.com".into()), ..Default::default() };
+        let cli = Cli {
+            url: Some("ftp://example.com".into()),
+            ..Default::default()
+        };
         let err = resolve_source(&cli).unwrap_err().to_string();
         assert!(err.contains("--url 仅支持 HTTP/HTTPS 地址"), "got: {err}");
 
-        let cli = Cli { url: Some("http://example.com/m".into()), ..Default::default() };
+        let cli = Cli {
+            url: Some("http://example.com/m".into()),
+            ..Default::default()
+        };
         assert_eq!(
             resolve_source(&cli).unwrap(),
             Source::Remote("http://example.com/m".into())
@@ -191,10 +203,22 @@ mod tests {
 
     #[test]
     fn rejects_unknown_target_and_channel() {
-        let cli = Cli { target: Some("linux".into()), ..Default::default() };
-        assert!(resolve_source(&cli).unwrap_err().to_string().contains("不支持的目标"));
+        let cli = Cli {
+            target: Some("linux".into()),
+            ..Default::default()
+        };
+        assert!(resolve_source(&cli)
+            .unwrap_err()
+            .to_string()
+            .contains("不支持的目标"));
 
-        let cli = Cli { channel: Some("beta".into()), ..Default::default() };
-        assert!(resolve_source(&cli).unwrap_err().to_string().contains("不支持的更新通道"));
+        let cli = Cli {
+            channel: Some("beta".into()),
+            ..Default::default()
+        };
+        assert!(resolve_source(&cli)
+            .unwrap_err()
+            .to_string()
+            .contains("不支持的更新通道"));
     }
 }

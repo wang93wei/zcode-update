@@ -33,10 +33,16 @@ pub fn detect(override_path: Option<&Path>) -> LocalApp {
 #[cfg(target_os = "macos")]
 fn detect_macos(app_dir: &Path) -> LocalApp {
     if !app_dir.is_dir() {
-        return LocalApp { installed: false, version: None };
+        return LocalApp {
+            installed: false,
+            version: None,
+        };
     }
     let info_plist = app_dir.join("Contents").join("Info.plist");
-    LocalApp { installed: true, version: read_plist_version(&info_plist) }
+    LocalApp {
+        installed: true,
+        version: read_plist_version(&info_plist),
+    }
 }
 
 /// 读取 Info.plist 的 CFBundleShortVersionString（XML/Binary 均支持）。
@@ -70,17 +76,26 @@ fn detect_windows(override_path: Option<&Path>) -> LocalApp {
         let base = PathBuf::from(local);
         let nsis_exe = base.join("Programs").join("ZCode").join("ZCode.exe");
         if nsis_exe.is_file() {
-            return LocalApp { installed: true, version: read_exe_version(&nsis_exe).ok() };
+            return LocalApp {
+                installed: true,
+                version: read_exe_version(&nsis_exe).ok(),
+            };
         }
         // Squirrel 安装形态：%LOCALAPPDATA%\zcode\app-<version>\ZCode.exe
         let squirrel_base = base.join("zcode");
         if squirrel_base.is_dir() {
             if let Some(version) = squirrel_pick_latest(&squirrel_base) {
-                return LocalApp { installed: true, version: Some(version) };
+                return LocalApp {
+                    installed: true,
+                    version: Some(version),
+                };
             }
         }
     }
-    LocalApp { installed: false, version: None }
+    LocalApp {
+        installed: false,
+        version: None,
+    }
 }
 
 /// 从 Squirrel 目录名 `app-<version>` 提取版本号；非匹配目录返回 None。
@@ -88,7 +103,10 @@ fn detect_windows(override_path: Option<&Path>) -> LocalApp {
 fn version_from_squirrel_dir_name(name: &str) -> Option<String> {
     let rest = name.strip_prefix("app-")?;
     let first = rest.chars().next()?;
-    if first.is_ascii_digit() && rest.chars().all(|c| c.is_ascii_digit() || c == '.') && !rest.is_empty() {
+    if first.is_ascii_digit()
+        && rest.chars().all(|c| c.is_ascii_digit() || c == '.')
+        && !rest.is_empty()
+    {
         Some(rest.to_string())
     } else {
         None
@@ -139,7 +157,10 @@ fn read_exe_version(exe: &Path) -> Result<String, anyhow::Error> {
     unsafe {
         let size = GetFileVersionInfoSizeW(wide.as_ptr(), std::ptr::null_mut());
         if size == 0 {
-            bail!("GetFileVersionInfoSizeW 失败（可能无版本资源）：{}", exe.display());
+            bail!(
+                "GetFileVersionInfoSizeW 失败（可能无版本资源）：{}",
+                exe.display()
+            );
         }
         let mut data = vec![0u8; size as usize];
         if GetFileVersionInfoW(wide.as_ptr(), 0, size, data.as_mut_ptr() as *mut _) == 0 {
@@ -150,7 +171,12 @@ fn read_exe_version(exe: &Path) -> Result<String, anyhow::Error> {
         let mut ptr: *mut std::ffi::c_void = std::ptr::null_mut();
         let mut len = 0u32;
         let trans_key = to_wide("\\VarFileInfo\\Translation");
-        if VerQueryValueW(data.as_ptr() as *const _, trans_key.as_ptr(), &mut ptr, &mut len) != 0
+        if VerQueryValueW(
+            data.as_ptr() as *const _,
+            trans_key.as_ptr(),
+            &mut ptr,
+            &mut len,
+        ) != 0
             && !ptr.is_null()
             && len >= 4
         {
@@ -162,7 +188,12 @@ fn read_exe_version(exe: &Path) -> Result<String, anyhow::Error> {
                 ));
                 let mut sptr: *mut std::ffi::c_void = std::ptr::null_mut();
                 let mut slen = 0u32;
-                if VerQueryValueW(data.as_ptr() as *const _, pv_key.as_ptr(), &mut sptr, &mut slen) != 0
+                if VerQueryValueW(
+                    data.as_ptr() as *const _,
+                    pv_key.as_ptr(),
+                    &mut sptr,
+                    &mut slen,
+                ) != 0
                     && !sptr.is_null()
                     && slen > 0
                 {
@@ -220,23 +251,31 @@ fn linux_dirs_installed() -> bool {
     }
     // /opt 下大小写不敏感前缀扫描（如 /opt/ZCode-1.2.3）
     ["ZCode", "zcode"].iter().any(|prefix| {
-        std::fs::read_dir("/opt").map(|rd| {
-            rd.flatten()
-                .any(|e| e.file_name().to_string_lossy().starts_with(prefix))
-        }).unwrap_or(false)
+        std::fs::read_dir("/opt")
+            .map(|rd| {
+                rd.flatten()
+                    .any(|e| e.file_name().to_string_lossy().starts_with(prefix))
+            })
+            .unwrap_or(false)
     })
 }
 
 #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
 fn package_manager_version() -> Option<String> {
-    if let Ok(out) = std::process::Command::new("dpkg").args(["-s", "zcode"]).output() {
+    if let Ok(out) = std::process::Command::new("dpkg")
+        .args(["-s", "zcode"])
+        .output()
+    {
         if out.status.success() {
             if let Some(v) = version_from_dpkg_output(&String::from_utf8_lossy(&out.stdout)) {
                 return Some(v);
             }
         }
     }
-    if let Ok(out) = std::process::Command::new("rpm").args(["-q", "zcode"]).output() {
+    if let Ok(out) = std::process::Command::new("rpm")
+        .args(["-q", "zcode"])
+        .output()
+    {
         if out.status.success() {
             if let Some(v) = version_from_rpm_output(&String::from_utf8_lossy(&out.stdout)) {
                 return Some(v);
@@ -276,8 +315,14 @@ mod tests {
 
     #[test]
     fn squirrel_dir_name_yields_version() {
-        assert_eq!(version_from_squirrel_dir_name("app-1.2.3"), Some("1.2.3".to_string()));
-        assert_eq!(version_from_squirrel_dir_name("app-10.0.1"), Some("10.0.1".to_string()));
+        assert_eq!(
+            version_from_squirrel_dir_name("app-1.2.3"),
+            Some("1.2.3".to_string())
+        );
+        assert_eq!(
+            version_from_squirrel_dir_name("app-10.0.1"),
+            Some("10.0.1".to_string())
+        );
         assert_eq!(version_from_squirrel_dir_name("app-beta"), None);
         assert_eq!(version_from_squirrel_dir_name("packages"), None);
     }
@@ -304,15 +349,24 @@ mod tests {
 
     #[test]
     fn rpm_query_output_parses_version_field() {
-        assert_eq!(version_from_rpm_output("zcode-1.2.3-1.x86_64\n"), Some("1.2.3".to_string()));
-        assert_eq!(version_from_rpm_output("package zcode is not installed\n"), None);
+        assert_eq!(
+            version_from_rpm_output("zcode-1.2.3-1.x86_64\n"),
+            Some("1.2.3".to_string())
+        );
+        assert_eq!(
+            version_from_rpm_output("package zcode is not installed\n"),
+            None
+        );
     }
 
     // ---------- macOS Info.plist 解析（fixture 文件，全平台可跑） ----------
 
     #[test]
     fn plist_fixture_version_is_read() {
-        let mut tmp = tempfile::Builder::new().suffix(".plist").tempfile().unwrap();
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".plist")
+            .tempfile()
+            .unwrap();
         use std::io::Write as _;
         write!(
             tmp.as_file_mut(),
@@ -323,17 +377,23 @@ mod tests {
              </dict></plist>"
         )
         .unwrap();
+        assert_eq!(read_plist_version(tmp.path()), Some("3.2.1".to_string()));
         assert_eq!(
-            read_plist_version(tmp.path()),
-            Some("3.2.1".to_string())
+            read_plist_version(Path::new("/nonexistent/info.plist")),
+            None
         );
-        assert_eq!(read_plist_version(Path::new("/nonexistent/info.plist")), None);
     }
 
     #[test]
     fn detect_missing_override_reports_not_installed() {
         // 传入必然不存在的路径：任何平台上都应报告未安装
         let app = detect(Some(Path::new("/nonexistent-zcode-path/ZCode")));
-        assert_eq!(app, LocalApp { installed: false, version: None });
+        assert_eq!(
+            app,
+            LocalApp {
+                installed: false,
+                version: None
+            }
+        );
     }
 }

@@ -34,8 +34,7 @@ pub fn format_release_date_in(raw: &str, tz: &jiff::tz::TimeZone) -> Option<Stri
 
 /// 使用系统本地时区格式化；解析失败时原样返回输入。
 pub fn format_release_date(raw: &str) -> String {
-    format_release_date_in(raw, &jiff::tz::TimeZone::system())
-        .unwrap_or_else(|| raw.to_string())
+    format_release_date_in(raw, &jiff::tz::TimeZone::system()).unwrap_or_else(|| raw.to_string())
 }
 
 /// “已是最新”分支的单行输出（exit 0，无其他内容）。
@@ -139,7 +138,10 @@ mod tests {
             version: "1.2.3".into(),
             release_name: Some("ZCode Preview".into()),
             release_date: Some("2026-07-31T13:02:56.736Z".into()),
-            urls: vec!["https://example.com/a.dmg".into(), "https://example.com/b.exe".into()],
+            urls: vec![
+                "https://example.com/a.dmg".into(),
+                "https://example.com/b.exe".into(),
+            ],
             release_notes: Some("- 修复若干问题".into()),
         }
     }
@@ -148,13 +150,19 @@ mod tests {
     fn up_to_date_line_matches_shell_copy() {
         let mut buf = Vec::new();
         render_up_to_date("1.2.3", &mut buf);
-        assert_eq!(String::from_utf8(buf).unwrap(), "✅ 当前已是最新版本：1.2.3，暂无更新。\n");
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            "✅ 当前已是最新版本：1.2.3，暂无更新。\n"
+        );
     }
 
     #[test]
     fn full_render_installed_branch_matches_shell_layout() {
         let m = sample_manifest();
-        let local = crate::local::LocalApp { installed: true, version: Some("1.2.2".into()) };
+        let local = crate::local::LocalApp {
+            installed: true,
+            version: Some("1.2.2".into()),
+        };
         let mut buf = Vec::new();
         render(&m, "https://src.example", &local, &mut buf);
         let text = String::from_utf8(buf).unwrap();
@@ -166,7 +174,10 @@ mod tests {
     #[test]
     fn full_render_not_installed_branch_matches_shell_layout() {
         let m = sample_manifest();
-        let local = crate::local::LocalApp { installed: false, version: None };
+        let local = crate::local::LocalApp {
+            installed: false,
+            version: None,
+        };
         let mut buf = Vec::new();
         render(&m, "file.yml", &local, &mut buf);
         let text = String::from_utf8(buf).unwrap();
@@ -178,10 +189,16 @@ mod tests {
     fn missing_notes_prints_placeholder() {
         let mut m = sample_manifest();
         m.release_notes = None;
-        let local = crate::local::LocalApp { installed: true, version: Some("0.0.1".into()) };
+        let local = crate::local::LocalApp {
+            installed: true,
+            version: Some("0.0.1".into()),
+        };
         let mut buf = Vec::new();
         render(&m, "src", &local, &mut buf);
         let text = String::from_utf8(buf).unwrap();
-        assert!(text.ends_with("\n更新日志：\n（Manifest 未提供更新日志）\n"), "got:\n{text}");
+        assert!(
+            text.ends_with("\n更新日志：\n（Manifest 未提供更新日志）\n"),
+            "got:\n{text}"
+        );
     }
 }

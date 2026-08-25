@@ -44,7 +44,10 @@ fn not_installed_branch_prints_full_info_and_exits_zero() {
 #[test]
 fn missing_version_file_errors_with_exit_code_2() {
     let file = write_manifest("releaseName: broken\n");
-    let cli = Cli { file: Some(file), ..Default::default() };
+    let cli = Cli {
+        file: Some(file),
+        ..Default::default()
+    };
     // run() 的错误走 stderr，这里只断言退出码
     let mut buf = Vec::new();
     assert_eq!(run(cli, &mut buf), 2);
@@ -53,7 +56,9 @@ fn missing_version_file_errors_with_exit_code_2() {
 #[test]
 fn unreadable_file_errors_with_exit_code_2() {
     let cli = Cli {
-        file: Some(std::path::PathBuf::from("/nonexistent-zcode-e2e/manifest.yml")),
+        file: Some(std::path::PathBuf::from(
+            "/nonexistent-zcode-e2e/manifest.yml",
+        )),
         ..Default::default()
     };
     let mut buf = Vec::new();
@@ -64,7 +69,11 @@ fn unreadable_file_errors_with_exit_code_2() {
 fn clap_conflicts_file_and_url() {
     // --file 与 --url 同时给出必须在参数层被拒绝
     let parsed = Cli::try_parse_from([
-        "zcode-update", "--file", "a.yml", "--url", "https://example.com",
+        "zcode-update",
+        "--file",
+        "a.yml",
+        "--url",
+        "https://example.com",
     ]);
     assert!(parsed.is_err(), "--file 与 --url 应互斥");
 }
