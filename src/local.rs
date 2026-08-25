@@ -214,7 +214,13 @@ fn read_exe_version(exe: &Path) -> Result<String, anyhow::Error> {
         {
             bail!("VerQueryValueW 查询根块失败");
         }
-        let fi = &*(ptr as *const VS_FIXEDFILEINFO);
+        // SAFETY：VerQueryValueW 成功返回时 ptr 指向缓冲区内的 VS_FIXEDFILEINFO，
+        // 缓冲区按 DWORD 分配满足对齐要求；签名不符则拒绝（MSDN 建议的防御检查）。
+        let fi_ptr = ptr as *const VS_FIXEDFILEINFO;
+        if fi_ptr.read_unaligned().dwSignature != 0xFEEF_04BD {
+            bail!("版本资源签名校验失败");
+        }
+        let fi = &*fi_ptr;
         let parts = [
             (fi.dwFileVersionMS >> 16) & 0xffff,
             fi.dwFileVersionMS & 0xffff,

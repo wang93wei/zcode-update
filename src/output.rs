@@ -74,8 +74,9 @@ pub fn render(m: &Manifest, source_label: &str, local: &LocalApp, out: &mut dyn 
     let _ = writeln!(out);
     let _ = writeln!(out, "更新日志：");
     match &m.release_notes {
+        // 对齐 shell：命令替换会剥掉尾随换行，printf 只补一个
         Some(notes) => {
-            let _ = writeln!(out, "{notes}");
+            let _ = writeln!(out, "{}", notes.trim_end_matches('\n'));
         }
         None => {
             let _ = writeln!(out, "（Manifest 未提供更新日志）");
@@ -198,6 +199,23 @@ mod tests {
         let text = String::from_utf8(buf).unwrap();
         assert!(
             text.ends_with("\n更新日志：\n（Manifest 未提供更新日志）\n"),
+            "got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn block_scalar_notes_trailing_newlines_are_normalized() {
+        let mut m = sample_manifest();
+        m.release_notes = Some("- 修复若干问题\n\n".into());
+        let local = crate::local::LocalApp {
+            installed: true,
+            version: Some("0.0.1".into()),
+        };
+        let mut buf = Vec::new();
+        render(&m, "src", &local, &mut buf);
+        let text = String::from_utf8(buf).unwrap();
+        assert!(
+            text.ends_with("\n更新日志：\n- 修复若干问题\n"),
             "got:\n{text}"
         );
     }

@@ -4,10 +4,10 @@ use crate::cli::Source;
 use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
 
-/// files 数组元素，仅关心 url。
+/// files 数组元素，仅关心 url；坏条目（缺失/null）在解析后跳过而非整体失败。
 #[derive(Debug, Deserialize)]
 struct FileEntry {
-    url: String,
+    url: Option<String>,
 }
 
 /// 服务端原始清单结构，字段均可缺失。
@@ -46,11 +46,14 @@ impl Manifest {
             .filter(|v| !v.trim().is_empty())
             .context("Manifest 中缺少 version")?;
 
-        // files[].url 去重保序
+        // files[].url 去重保序；坏条目跳过（对齐 awk 行为）；纯空白视为无 url
         let mut urls: Vec<String> = Vec::new();
         for entry in raw.files.into_iter().flatten() {
-            if !entry.url.is_empty() && !urls.contains(&entry.url) {
-                urls.push(entry.url);
+            if let Some(url) = entry.url {
+                let url = url.trim().to_string();
+                if !url.is_empty() && !urls.contains(&url) {
+                    urls.push(url);
+                }
             }
         }
         // 回退：顶层 path 作为唯一下载链接（对齐 awk END 逻辑）
@@ -174,5 +177,19 @@ files:
         // 注：需附带 path 以通过下载链接校验；本测试仅关注引号去除
         let yaml = "version: \"9.9.9\"\npath: https://example.com/pkg.zip";
         assert_eq!(Manifest::from_yaml(yaml).unwrap().version, "9.9.9");
+    }
+
+    #[test]
+    fn malformed_file_entries_are_skipped_not_fatal() {
+        let yaml = "\
+version: 1.0.0
+files:
+  - {}
+  - url:
+  - url:   https://example.com/a.dmg
+  - url: https://example.com/a.dmg
+";
+        let m = Manifest::from_yaml(yaml).unwrap();
+        assert_eq!(m.urls, vec!["https://example.com/a.dmg".to_string()]);
     }
 }
