@@ -15,7 +15,7 @@ const DEFAULT_ENDPOINT: &str = "https://zcode.z.ai/api/v1/releases/electron/mani
     about = "查询并解析 ZCode Electron 更新清单"
 )]
 pub struct Cli {
-    /// 查询目标：mac（默认）或 windows
+    /// 查询目标：mac（默认）、windows 或 linux
     #[arg(long)]
     pub target: Option<String>,
 
@@ -96,6 +96,14 @@ pub fn resolve_source(cli: &Cli) -> Result<Source> {
                 None => "x86_64",
             };
             format!("windows-{arch}")
+        }
+        "linux" => {
+            let arch = match &cli.arch {
+                Some(a) => normalize_arch(a)?,
+                // Linux 缺省取当前运行架构
+                None => normalize_arch(std::env::consts::ARCH)?,
+            };
+            format!("linux-{arch}")
         }
         other => bail!("不支持的目标：{other}"),
     };
@@ -204,7 +212,7 @@ mod tests {
     #[test]
     fn rejects_unknown_target_and_channel() {
         let cli = Cli {
-            target: Some("linux".into()),
+            target: Some("freebsd".into()),
             ..Default::default()
         };
         assert!(resolve_source(&cli)
@@ -220,5 +228,38 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("不支持的更新通道"));
+    }
+
+    #[test]
+    fn linux_defaults_to_native_arch() {
+        let cli = Cli {
+            target: Some("linux".into()),
+            ..Default::default()
+        };
+        match resolve_source(&cli).unwrap() {
+            Source::Remote(url) => {
+                let arch = normalize_arch(std::env::consts::ARCH).unwrap();
+                assert_eq!(
+                    url,
+                    format!("https://zcode.z.ai/api/v1/releases/electron/manifest?platform=linux-{arch}&channel=3")
+                );
+            }
+            other => panic!("期望 Remote，得到 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn linux_explicit_arm64_maps_to_aarch64() {
+        let cli = Cli {
+            target: Some("linux".into()),
+            arch: Some("arm64".into()),
+            ..Default::default()
+        };
+        match resolve_source(&cli).unwrap() {
+            Source::Remote(url) => {
+                assert!(url.contains("platform=linux-aarch64"), "got: {url}");
+            }
+            other => panic!("期望 Remote，得到 {other:?}"),
+        }
     }
 }

@@ -11,14 +11,21 @@ pub fn strip_v(version: &str) -> &str {
     s.strip_prefix('V').unwrap_or(s)
 }
 
-/// 按链接中的扩展名分类展示标签（子串匹配，与 shell case 模式一致）。
+/// 按链接中的扩展名分类展示标签（子串匹配、大小写不敏感）。
 pub fn classify_url(url: &str) -> &'static str {
-    if url.contains(".dmg") {
+    let lower = url.to_lowercase();
+    if lower.contains(".dmg") {
         "DMG"
-    } else if url.contains(".zip") {
+    } else if lower.contains(".zip") {
         "ZIP"
-    } else if url.contains(".exe") {
+    } else if lower.contains(".exe") {
         "EXE"
+    } else if lower.contains(".appimage") {
+        "APPIMAGE"
+    } else if lower.contains(".deb") {
+        "DEB"
+    } else if lower.contains(".rpm") {
+        "RPM"
     } else {
         "FILE"
     }
@@ -104,6 +111,9 @@ mod tests {
         assert_eq!(classify_url("https://x/a.dmg"), "DMG");
         assert_eq!(classify_url("https://x/a.zip?sig=1"), "ZIP");
         assert_eq!(classify_url("https://x/ZCode.exe"), "EXE");
+        assert_eq!(classify_url("https://x/ZCode-1.2.3.AppImage"), "APPIMAGE");
+        assert_eq!(classify_url("https://x/zcode_1.2.3_amd64.deb"), "DEB");
+        assert_eq!(classify_url("https://x/zcode-1.2.3.x86_64.rpm"), "RPM");
         assert_eq!(classify_url("https://x/zcode-1.2.3.tar.gz"), "FILE");
     }
 
