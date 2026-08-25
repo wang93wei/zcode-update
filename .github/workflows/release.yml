@@ -2,6 +2,11 @@ name: release
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '发行版标签（如 v1.2.3）；留空则自动用 v0.0.0-run.<编号> 并标记为预发布'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -57,8 +62,37 @@ jobs:
           name: zcode-update-${{ matrix.target }}
           path: zcode-update-${{ matrix.target }}.*
 
-      - name: Attach to release (tag only)
-        if: startsWith(github.ref, 'refs/tags/')
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # 标签优先级：在 tag 引用上触发 > 手动输入 > 自动生成（标记预发布）
+      - name: Determine release tag
+        id: rel
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${INPUT_TAG}" ]]; then
+            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v0.0.0-run.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release and attach archives
         uses: softprops/action-gh-release@v2
         with:
-          files: zcode-update-${{ matrix.target }}.*
+          tag_name: ${{ steps.rel.outputs.tag }}
+          prerelease: ${{ steps.rel.outputs.prerelease }}
+          generate_release_notes: true
+          files: dist/*
