@@ -63,3 +63,7 @@ GitHub Actions 矩阵（macOS arm64 / Ubuntu x86_64 / Windows x86_64）自动测
 
 - `0`：成功（包括"当前已是最新版本"）
 - `2`：参数错误、网络失败、清单缺失字段等一切业务错误
+
+## 协议
+
+[GPL-3.0-or-later](LICENSE) © wang93wei

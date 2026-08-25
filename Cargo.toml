@@ -2,6 +2,9 @@
 name = "zcode-update"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-or-later"
+description = "查询并解析 ZCode Electron 更新清单的命令行工具"
+authors = ["wang93wei"]
 
 [dependencies]
 anyhow = "1"
