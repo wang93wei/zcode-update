@@ -15,7 +15,7 @@ const DEFAULT_ENDPOINT: &str = "https://zcode.z.ai/api/v1/releases/electron/mani
     about = "查询并解析 ZCode Electron 更新清单"
 )]
 pub struct Cli {
-    /// 查询目标：mac（默认）、windows 或 linux
+    /// 查询目标：mac、windows 或 linux；默认使用当前运行平台
     #[arg(long)]
     pub target: Option<String>,
 
@@ -65,6 +65,41 @@ fn channel_id(channel: &str) -> Result<&'static str> {
     }
 }
 
+/// 根据显式目标或宿主平台生成 Manifest 的 platform 参数。
+///
+/// `target` 为空时跟随当前运行平台；显式目标始终优先，便于跨平台查询。
+pub fn resolve_platform(
+    target: Option<&str>,
+    arch: Option<&str>,
+    host_os: &str,
+    host_arch: &str,
+) -> Result<String> {
+    match target.unwrap_or(host_os) {
+        "mac" | "macos" | "darwin" => {
+            let arch = match arch {
+                Some(arch) => normalize_arch(arch)?,
+                None => normalize_arch(host_arch)?,
+            };
+            Ok(format!("darwin-{arch}"))
+        }
+        "windows" | "win" => {
+            let arch = match arch {
+                Some(arch) => normalize_arch(arch)?,
+                None => "x86_64",
+            };
+            Ok(format!("windows-{arch}"))
+        }
+        "linux" => {
+            let arch = match arch {
+                Some(arch) => normalize_arch(arch)?,
+                None => normalize_arch(host_arch)?,
+            };
+            Ok(format!("linux-{arch}"))
+        }
+        other => bail!("不支持的目标：{other}"),
+    }
+}
+
 /// 依据 CLI 参数决定清单来源（优先级：--file > --url > 默认 endpoint）。
 pub fn resolve_source(cli: &Cli) -> Result<Source> {
     // 1. 本地文件最高优先级（--file/--url 互斥由 clap 保证，此处兜底防御）
@@ -80,33 +115,13 @@ pub fn resolve_source(cli: &Cli) -> Result<Source> {
         return Ok(Source::Remote(url.clone()));
     }
 
-    // 3. 默认 endpoint：先确定 target（无效立即报错），再决定 arch 缺省值
-    let platform = match cli.target.as_deref().unwrap_or("mac") {
-        "mac" | "macos" | "darwin" => {
-            let arch = match &cli.arch {
-                Some(a) => normalize_arch(a)?,
-                // macOS 缺省取当前运行架构
-                None => normalize_arch(std::env::consts::ARCH)?,
-            };
-            format!("darwin-{arch}")
-        }
-        "windows" | "win" => {
-            let arch = match &cli.arch {
-                Some(a) => normalize_arch(a)?,
-                None => "x86_64",
-            };
-            format!("windows-{arch}")
-        }
-        "linux" => {
-            let arch = match &cli.arch {
-                Some(a) => normalize_arch(a)?,
-                // Linux 缺省取当前运行架构
-                None => normalize_arch(std::env::consts::ARCH)?,
-            };
-            format!("linux-{arch}")
-        }
-        other => bail!("不支持的目标：{other}"),
-    };
+    // 3. 默认 endpoint：未指定 target 时跟随当前运行平台。
+    let platform = resolve_platform(
+        cli.target.as_deref(),
+        cli.arch.as_deref(),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    )?;
 
     let id = channel_id(cli.channel.as_deref().unwrap_or("preview"))?;
     Ok(Source::Remote(format!(
@@ -166,14 +181,29 @@ mod tests {
     }
 
     #[test]
-    fn default_target_mac_uses_channel_preview_and_local_arch() {
+    fn default_target_follows_windows_host() {
+        assert_eq!(
+            resolve_platform(None, None, "windows", "x86_64").unwrap(),
+            "windows-x86_64"
+        );
+    }
+
+    #[test]
+    fn default_target_uses_channel_preview_and_running_platform() {
         let cli = Cli::default();
         match resolve_source(&cli).unwrap() {
             Source::Remote(url) => {
-                let arch = normalize_arch(std::env::consts::ARCH).unwrap();
+                let platform = match std::env::consts::OS {
+                    "macos" => {
+                        format!("darwin-{}", normalize_arch(std::env::consts::ARCH).unwrap())
+                    }
+                    "windows" => "windows-x86_64".to_string(),
+                    "linux" => format!("linux-{}", normalize_arch(std::env::consts::ARCH).unwrap()),
+                    other => panic!("测试不支持当前平台：{other}"),
+                };
                 assert_eq!(
                     url,
-                    format!("https://zcode.z.ai/api/v1/releases/electron/manifest?platform=darwin-{arch}&channel=3")
+                    format!("https://zcode.z.ai/api/v1/releases/electron/manifest?platform={platform}&channel=3")
                 );
             }
             other => panic!("期望 Remote，得到 {other:?}"),

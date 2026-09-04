@@ -65,14 +65,14 @@ CLI 参数 ──► 来源选择 ──► Manifest 文本 ──► 解析为�
 1. `--file <path>`：读本地文件，不请求网络
 2. `--url <url>`：请求指定 HTTP/HTTPS 地址
 3. 默认：`https://zcode.z.ai/api/v1/releases/electron/manifest?platform=<PLATFORM>&channel=<CHANNEL_ID>`
-   - PLATFORM：`darwin-{arch}` 或 `windows-{arch}`
+   - PLATFORM：`darwin-{arch}`、`windows-{arch}` 或 `linux-{arch}`
    - CHANNEL_ID：preview=3，stable=1
-   - mac 时 arch 缺省取本机架构；windows 缺省 x86_64
+   - target 缺省取当前运行平台；mac/Linux 的 arch 缺省取本机架构，Windows 缺省 x86_64
 
-## 5. CLI 接口（与 .sh 对齐）
+## 5. CLI 接口
 
 ```
---target <mac|windows>   查询目标，默认 mac；windows 默认 arch=x86_64
+--target <mac|windows|linux>   查询目标，默认使用当前运行平台；windows 默认 arch=x86_64
 --arch <arm64|x64|...>   归一化：arm64/aarch64→aarch64；x64/x86_64/amd64→x86_64
 --channel <preview|stable>  默认 preview
 --file <path>            本地 manifest，与 --url 互斥
@@ -83,7 +83,7 @@ CLI 参数 ──► 来源选择 ──► Manifest 文本 ──► 解析为�
 
 错误行为：未知参数、缺参数值、互斥冲突、不支持的 target/channel/arch → 中文错误信息 + exit code 2（对齐 `die()`）。
 
-注：`--target` 仅影响远程清单的 platform 参数；本地探测始终按运行平台执行。Linux 运行时可正常探测本地版本，但远程清单仍只有 mac/windows 两类 platform（与原脚本一致）。
+注：`--target` 仅影响远程清单的 platform 参数；本地探测始终按运行平台执行。未传 `--target` 时，远程清单与本地探测均使用当前运行平台。旧版 `zcode-preview-update.sh` 仅面向 macOS，仍默认查询 macOS，不作为跨平台 Rust CLI 的默认行为。
 
 ## 6. Manifest 解析（manifest.rs）
 

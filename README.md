@@ -27,7 +27,7 @@ cargo build --release
   zcode-update --url https://example.com/manifest
 
 选项：
-  --target   查询目标，默认 mac；windows 默认使用 x64，linux 默认取本机架构
+  --target   查询目标，默认使用当前运行平台；windows 默认使用 x64，mac/linux 默认取本机架构
   --arch     目标架构：arm64、aarch64、x64、x86_64
   --channel  更新通道：preview（默认）或 stable
   --file     解析本地 ZCode YAML Manifest，不请求网络（与 --url 互斥）
@@ -39,7 +39,7 @@ cargo build --release
 示例：
 
 ```bash
-zcode-update                       # 查询本机架构的 mac preview 最新版
+zcode-update                       # 查询当前运行平台的 preview 最新版
 zcode-update --target windows      # 查询 windows x64
 zcode-update --file ./manifest.yml # 离线解析本地清单
 ```
