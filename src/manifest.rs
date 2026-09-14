@@ -81,23 +81,27 @@ pub fn load(source: &Source) -> Result<(Manifest, String)> {
     let text = match source {
         Source::LocalFile(path) => std::fs::read_to_string(path)
             .with_context(|| format!("无法读取文件：{}", path.display()))?,
-        Source::Remote(url) => fetch(url)?,
+        Source::Remote(url) => return Ok((fetch(url)?, url.clone())),
     };
     let label = match source {
         Source::LocalFile(path) => path.display().to_string(),
         Source::Remote(url) => url.clone(),
     };
-    Ok((Manifest::from_yaml(&text)?, label))
+    let manifest =
+        Manifest::from_yaml(&text).with_context(|| format!("解析 Manifest 失败；来源：{label}"))?;
+    Ok((manifest, label))
 }
 
 /// 下载清单文本。超时/头部与原 curl 参数对齐；UA 保持不变以便服务端统计口径一致。
-pub(crate) fn fetch(url: &str) -> Result<String> {
+pub(crate) fn fetch(url: &str) -> Result<Manifest> {
     use std::time::Duration;
 
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(30)))
         .timeout_connect(Some(Duration::from_secs(10)))
         .user_agent("zcode-preview-update.sh")
+        // 保留错误状态的响应正文，方便识别接口错误和限流。
+        .http_status_as_error(false)
         .build()
         .into();
 
@@ -105,17 +109,59 @@ pub(crate) fn fetch(url: &str) -> Result<String> {
         .get(url)
         .header("Accept", "application/x-yaml,text/yaml,text/plain,*/*")
         .call()
-        .map_err(|e| anyhow!("下载 Manifest 失败：{e}"))?;
+        .map_err(|e| anyhow!("下载 Manifest 失败；请求地址：{url}；{e}"))?;
 
-    response
+    let status = response.status();
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("未提供")
+        .to_string();
+    let context = format!("请求地址：{url}；HTTP：{status}；响应类型：{content_type}");
+    let text = response
         .body_mut()
         .read_to_string()
-        .context("读取 Manifest 响应失败")
+        .with_context(|| format!("读取 Manifest 响应失败；{context}"))?;
+    if !status.is_success() {
+        bail!(
+            "下载 Manifest 失败；{context}；响应摘要：{}",
+            response_summary(&text)
+        );
+    }
+    Manifest::from_yaml(&text).with_context(|| {
+        format!(
+            "解析远程 Manifest 失败；{context}；响应摘要：{}",
+            response_summary(&text)
+        )
+    })
+}
+
+/// 限制为 300 个字符，并去掉换行与终端控制字符。
+fn response_summary(text: &str) -> String {
+    let mut chars = text.chars().map(|c| if c.is_control() { ' ' } else { c });
+    let mut summary: String = chars.by_ref().take(300).collect();
+    if chars.next().is_some() {
+        summary.push('…');
+    }
+    if summary.trim().is_empty() {
+        return "（空响应）".to_string();
+    }
+    summary
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn response_summary_bounds_unicode_and_removes_controls() {
+        let summary = response_summary(&format!("\n\u{1b}{}", "错".repeat(400)));
+        assert_eq!(summary.chars().count(), 301);
+        assert!(summary.ends_with('…'));
+        assert!(!summary.chars().any(char::is_control));
+        assert_eq!(response_summary("\r\n"), "（空响应）");
+    }
 
     const SAMPLE: &str = r#"
 version: 1.2.3

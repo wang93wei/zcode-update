@@ -105,3 +105,80 @@ fn up_to_date_branch_exits_zero_on_macos() {
     assert_eq!(code, 0);
     // 退出码为准（文案已由 render 的 golden 单测覆盖）
 }
+
+/// 通过真实 HTTP 和 CLI stderr 验证异常响应，不访问外网。
+#[test]
+fn remote_responses_report_context_and_preserve_success() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::process::Command;
+
+    for (status, content_type, body, expected) in [
+        (
+            "200 OK",
+            "application/json",
+            r#"{"code":429,"message":"请求频繁"}"#,
+            Some("Manifest 中缺少 version"),
+        ),
+        (
+            "429 Too Many Requests",
+            "application/json",
+            r#"{"message":"请求频繁"}"#,
+            Some("下载 Manifest 失败"),
+        ),
+        (
+            "200 OK",
+            "text/html",
+            "<html>服务暂不可用</html>",
+            Some("解析远程 Manifest 失败"),
+        ),
+        (
+            "200 OK",
+            "application/yaml",
+            "",
+            Some("解析远程 Manifest 失败"),
+        ),
+        ("200 OK", "application/yaml", FRESH_MANIFEST, None),
+    ] {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/manifest", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut byte = [0u8; 1];
+            while !request.ends_with(b"\r\n\r\n") {
+                stream.read_exact(&mut byte).unwrap();
+                request.push(byte[0]);
+            }
+            write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+        });
+        let output = Command::new(env!("CARGO_BIN_EXE_zcode-update"))
+            .args(["--url", &url, "--app", "/nonexistent-zcode-e2e/App"])
+            .env_remove("HTTP_PROXY")
+            .env_remove("HTTPS_PROXY")
+            .env_remove("ALL_PROXY")
+            .env_remove("http_proxy")
+            .env_remove("https_proxy")
+            .env_remove("all_proxy")
+            .output()
+            .unwrap();
+        server.join().unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        if let Some(expected) = expected {
+            assert_eq!(output.status.code(), Some(2));
+            for text in [expected, &url, status, content_type, "响应摘要：", body] {
+                assert!(stderr.contains(text), "missing {text:?}: {stderr}");
+            }
+            assert!(output.stdout.is_empty());
+        } else {
+            assert!(output.status.success(), "{stderr}");
+            assert!(stderr.is_empty());
+            assert!(String::from_utf8(output.stdout)
+                .unwrap()
+                .contains("最新版本：99.0.0"));
+        }
+    }
+}
