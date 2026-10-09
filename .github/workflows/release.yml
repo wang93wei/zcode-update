@@ -28,19 +28,22 @@ jobs:
             archive: zip
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      - parallel:
+          - uses: actions/checkout@v4
+          - uses: dtolnay/rust-toolchain@stable
+            with:
+              targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-workspace-${{ matrix.target }}
+          cache-workspace-crates: true
 
       - name: Test
-        run: cargo test --release --target ${{ matrix.target }} --verbose
+        run: cargo test --locked --release --target ${{ matrix.target }} --verbose
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }} --verbose
+        run: cargo build --locked --release --target ${{ matrix.target }} --verbose
 
       - name: Package (unix)
         if: matrix.archive == 'tar.gz'
@@ -61,6 +64,8 @@ jobs:
         with:
           name: zcode-update-${{ matrix.target }}
           path: zcode-update-${{ matrix.target }}.*
+          compression-level: 0
+          if-no-files-found: error
 
   release:
     needs: build
