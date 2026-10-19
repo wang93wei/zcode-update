@@ -1,0 +1,43 @@
+name: check
+
+on:
+  push:
+    branches: ['verify/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --locked --release --verbose
+      - name: Build
+        run: cargo build --locked --release --verbose
+      - name: Verify published installer link
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          target/release/zcode-update --target mac --arch arm64 --probe-version 3.16.1 | tee probe.txt
+          grep -F '安装包链接可用（HTTP 200）' probe.txt
+          grep -F '官方推送版本：' probe.txt
+          grep -F '更新日志：' probe.txt
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: zcode-update-${{ runner.os }}
+          path: |
+            target/release/zcode-update
+            target/release/zcode-update.exe
+          if-no-files-found: error

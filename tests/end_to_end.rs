@@ -182,3 +182,20 @@ fn remote_responses_report_context_and_preserve_success() {
         }
     }
 }
+
+#[test]
+fn probe_version_validates_input_and_manifest_conflicts() {
+    for value in ["3.16.1", "v3.16.1", "V3.16.1"] {
+        let cli = Cli::try_parse_from(["zcode-update", "--probe-version", value]).unwrap();
+        assert_eq!(cli.probe_version.as_deref(), Some("3.16.1"));
+    }
+    for value in ["", "3.16", "3.16.1.2", "../3.16.1", "3.16.1?x=1", "3.16.1-beta", "03.16.1"] {
+        assert!(Cli::try_parse_from(["zcode-update", "--probe-version", value]).is_err());
+    }
+    for args in [
+        vec!["zcode-update", "--probe-version", "3.16.1", "--file", "a.yml"],
+        vec!["zcode-update", "--probe-version", "3.16.1", "--url", "https://example.com"],
+    ] {
+        assert!(Cli::try_parse_from(args).is_err());
+    }
+}

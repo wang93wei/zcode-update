@@ -23,6 +23,7 @@ cargo build --release
   zcode-update
   zcode-update --target mac|windows|linux [--arch arm64|x64]
   zcode-update --channel preview|stable
+  zcode-update --probe-version 3.16.1 [--target mac|windows|linux] [--arch arm64|x64]
   zcode-update --file /path/to/manifest.yml
   zcode-update --url https://example.com/manifest
 
@@ -30,6 +31,7 @@ cargo build --release
   --target   查询目标，默认使用当前运行平台；windows 默认使用 x64，mac/linux 默认取本机架构
   --arch     目标架构：arm64、aarch64、x64、x86_64
   --channel  更新通道：preview（默认）或 stable
+  --probe-version 探测指定版本安装包，与 --file / --url 互斥
   --file     解析本地 ZCode YAML Manifest，不请求网络（与 --url 互斥）
   --url      解析指定的 HTTP/HTTPS Manifest（与 --file 互斥）
   --app      本地应用路径（见下方各平台说明）
@@ -41,8 +43,16 @@ cargo build --release
 ```bash
 zcode-update                       # 查询当前运行平台的 preview 最新版
 zcode-update --target windows      # 查询 windows x64
+zcode-update --probe-version 3.16.1 # 检查当前平台的指定版本安装包
 zcode-update --file ./manifest.yml # 离线解析本地清单
 ```
+
+`--probe-version` 使用 HEAD 请求检查官方 CDN 的安装包链接，并单独显示所选通道的官方推送版本。
+macOS 检查 DMG，Windows 检查 EXE，Linux 检查 AppImage；沿用 `--target` / `--arch` 的默认值。
+链接返回 200 仅表示可访问，不代表正式发布、签名有效或已进入更新清单；不会下载或安装。
+版本与清单不同时，更新日志显示“未知”，不使用旧版日志。清单查询失败时仍显示安装包探测结果。
+404 表示该链接未找到，退出码为 0；网络错误、其他异常状态或 HTML/JSON 响应退出码为 2。
+Shell 旧版脚本不支持此参数。
 
 ## 本地版本检测
 

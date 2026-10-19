@@ -4,6 +4,7 @@ pub mod cli;
 pub mod local;
 pub mod manifest;
 pub mod output;
+mod probe;
 
 use cli::{resolve_source, Cli};
 use std::io::Write;
@@ -22,6 +23,10 @@ pub fn run(cli: Cli, out: &mut dyn Write) -> i32 {
 fn try_run(cli: &Cli, out: &mut dyn Write) -> anyhow::Result<i32> {
     // 1. 决定清单来源（--file / --url / 默认 endpoint）
     let source = resolve_source(cli)?;
+
+    if let Some(version) = &cli.probe_version {
+        return probe::run(cli, version, &source, out);
+    }
 
     // 2. 加载并解析清单
     let (manifest, source_label) = manifest::load(&source)?;

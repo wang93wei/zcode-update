@@ -27,6 +27,10 @@ pub struct Cli {
     #[arg(long)]
     pub channel: Option<String>,
 
+    /// 探测指定版本的安装包（如 3.16.1），不下载或安装
+    #[arg(long, conflicts_with_all = ["file", "url"], value_parser = parse_probe_version)]
+    pub probe_version: Option<String>,
+
     /// 解析本地 YAML Manifest，不请求网络（与 --url 互斥）
     #[arg(long, conflicts_with = "url")]
     pub file: Option<PathBuf>,
@@ -38,6 +42,21 @@ pub struct Cli {
     /// 本地应用路径（macOS 为 .app 目录；Windows 为 exe；Linux 影响安装判定）
     #[arg(long)]
     pub app: Option<PathBuf>,
+}
+
+fn parse_probe_version(value: &str) -> std::result::Result<String, String> {
+    let value = value.strip_prefix(['v', 'V']).unwrap_or(value);
+    let parts: Vec<_> = value.split('.').collect();
+    if parts.len() != 3
+        || parts.iter().any(|part| {
+            part.is_empty()
+                || !part.bytes().all(|byte| byte.is_ascii_digit())
+                || (part.len() > 1 && part.starts_with('0'))
+        })
+    {
+        return Err("版本须为三段数字，例如 3.16.1".into());
+    }
+    Ok(value.to_string())
 }
 
 /// 清单来源：本地文件或远程 URL。
