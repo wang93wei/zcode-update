@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           target/release/zcode-update --target mac --arch arm64 --probe-version 3.16.1 | tee probe.txt
           grep -F '安装包链接可用（HTTP 200）' probe.txt
-          grep -F '官方推送版本：' probe.txt
+          grep -E '官方推送版本：[vV]?[0-9]+\.[0-9]+\.[0-9]+' probe.txt
           grep -F '更新日志：' probe.txt
       - name: Upload executable
         uses: actions/upload-artifact@v4
